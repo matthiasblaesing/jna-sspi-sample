@@ -1,10 +1,6 @@
 package eu.doppel_helix.kerberos.kerberostest2;
 
-
-
-
 import com.sun.jna.Native;
-import com.sun.jna.Pointer;
 import com.sun.jna.Structure;
 import com.sun.jna.platform.win32.Secur32;
 import com.sun.jna.platform.win32.Sspi;
@@ -21,7 +17,7 @@ public interface Secur32X extends Secur32 {
      * with the credential. The information is valid for any security context
      * created with the specified credential.
      *
-     * @param phContext   A handle of the credentials to be queried.
+     * @param phCredential A handle of the credentials to be queried.
      * @param ulAttribute Specifies the attribute of the context to be returned.
      *                    This parameter can be one of the SECPKG_ATTR_* values
      *                    defined in {@link Sspi}.
@@ -93,7 +89,178 @@ public interface Secur32X extends Secur32 {
      * @return If the function succeeds, the function returns SEC_E_OK.
      * @see <a href="https://msdn.microsoft.com/en-us/library/windows/desktop/aa375385(v=vs.85).aspx">MSDN Entry</a>
      */
-    int EncryptMessage(CtxtHandle phContext, int fQOP, Sspi.SecBufferDesc pMessage, int MessageSeqNo);
+    int EncryptMessage(CtxtHandle phContext, int fQOP, SspiX.SecBufferDesc2 pMessage, int MessageSeqNo);
+    
+    /**
+     * VerifySignature function.
+     *
+     * <p>
+     * Verifies that a message signed by using the MakeSignature function was
+     * received in the correct sequence and has not been modified.</p>
+     *
+     * <p>
+     * <strong>Warning</strong></p>
+     *
+     * <p>
+     * The VerifySignature function will fail if the message was signed using
+     * the RsaSignPssSha512 algorithm on a different version of Windows. For
+     * example, a message that was signed by calling the MakeSignature function
+     * on Windows 8 will cause the VerifySignature function on Windows 8.1 to
+     * fail.</p>
+     *
+     * @param phContext    A handle to the security context to use for the
+     *                     message.
+     * @param pMessage     Pointer to a SecBufferDesc structure that references
+     *                     a set of SecBuffer structures that contain the
+     *                     message and signature to verify. The signature is in
+     *                     a SecBuffer structure of type SECBUFFER_TOKEN.
+     * @param MessageSeqNo Specifies the sequence number expected by the
+     *                     transport application, if any. If the transport
+     *                     application does not maintain sequence numbers, this
+     *                     parameter is zero.
+     * @param pfQOP        Pointer to a ULONG variable that receives
+     *                     package-specific flags that indicate the quality of
+     *                     protection.
+     *
+     *                      <p>Some security packages ignore this parameter.</p>
+     *
+     * @return If the function verifies that the message was received in the
+     *         correct sequence and has not been modified, the return value is
+     *         SEC_E_OK.
+     *
+     * <p>
+     * If the function determines that the message is not correct according to
+     * the information in the signature, the return value can be one of the
+     * following error codes.</p>
+     * 
+     * <table>
+     * <tr><th>Return code</th><th>Description</th></tr>
+     * <tr><td>SEC_E_OUT_OF_SEQUENCE</td><td>The message was not received in the
+     * correct sequence.</td></tr>
+     * <tr><td>SEC_E_MESSAGE_ALTERED</td><td>The message has been
+     * altered.</td></tr>
+     * <tr><td>SEC_E_INVALID_HANDLE</td><td>The context handle specified by
+     * phContext is not valid.</td></tr>
+     * <tr><td>SEC_E_INVALID_TOKEN</td><td>pMessage did not contain a valid
+     * SECBUFFER_TOKEN buffer, or contained too few buffers.</td></tr>
+     * <tr><td>SEC_E_QOP_NOT_SUPPORTED</td><td>The quality of protection
+     * negotiated between the client and server did not include integrity
+     * checking.</td></tr>
+     * </table>
+     */
+    int VerifySignature(CtxtHandle phContext, SspiX.SecBufferDesc2 pMessage, int MessageSeqNo, IntByReference pfQOP);
+    
+    /**
+     * MakeSignature function.
+     * 
+     * <p>
+     * The MakeSignature function generates a cryptographic checksum of the
+     * message, and also includes sequencing information to prevent message loss
+     * or insertion. MakeSignature allows the application to choose between
+     * several cryptographic algorithms, if supported by the chosen mechanism.
+     * The MakeSignature function uses the security context referenced by the
+     * context handle.</p>
+     *
+     * <p>
+     * <strong>Remarks</strong></p>
+     *
+     * <p>
+     * Remarks</p>
+     *<p>
+     * The MakeSignature function generates a signature that is based on the
+     * message and the session key for the context.</p>
+     *<p>
+     * The VerifySignature function verifies the messages signed by the
+     * MakeSignature function.</p>
+     *<p>
+     * If the transport application created the security context to support
+     * sequence detection and the caller provides a sequence number, the
+     * function includes this information in the signature. This protects
+     * against reply, insertion, and suppression of messages. The security
+     * package incorporates the sequence number passed down from the transport
+     * application.</p>
+     *
+     * @param phContext    A handle to the security context to use to sign the
+     *                     message.
+     * @param fQOP         Package-specific flags that indicate the quality of
+     *                     protection. A security package can use this parameter
+     *                     to enable the selection of cryptographic algorithms.
+     * <p>
+     * When using the Digest SSP, this parameter must be set to zero.</p>
+     *
+     * @param pMessage     A pointer to a SecBufferDesc structure. On input, the
+     *                     structure references one or more SecBuffer structures
+     *                     that contain the message to be signed. The function
+     *                     does not process buffers with the
+     *                     SECBUFFER_READONLY_WITH_CHECKSUM attribute.
+     *
+     * <p>
+     * The SecBufferDesc structure also references a SecBuffer structure of type
+     * SECBUFFER_TOKEN that receives the signature.</p>
+     * <p>
+     * When the Digest SSP is used as an HTTP authentication protocol, the
+     * buffers should be configured as follows.</p>
+     * <table>
+     * <tr><th>Buffer #/buffer type</th><th>Meaning</th></tr>
+     * <tr><td>0 / SECBUFFER_TOKEN</td><td>Empty.</td></tr>
+     * <tr><td>1 / SECBUFFER_PKG_PARAMS</td><td>Method.</td></tr>
+     * <tr><td>2 / SECBUFFER_PKG_PARAMS</td><td>URL.</td></tr>
+     * <tr><td>3 / SECBUFFER_PKG_PARAMS</td><td>HEntity. For more information,
+     * see Input Buffers for the Digest Challenge Response.</td></tr>
+     * <tr><td>4 / SECBUFFER_PADDING</td><td>Empty. Receives the
+     * signature.</td></tr>
+     * </table>
+     *<p>
+     * When the Digest SSP is used as an SASL mechanism, the buffers should be
+     * configured as follows.</p>
+     *<table>
+     * <tr><th>Buffer #/buffer type</th><th>Meaning</th></tr>
+     * <tr><td>0 / SECBUFFER_TOKEN</td><td>Empty. Receives the signature. This
+     * buffer must be large enough to hold the largest possible signature.
+     * Determine the size required by calling the QueryContextAttributes
+     * (General) function and specifying SECPKG_ATTR_SIZES. Check the returned
+     * SecPkgContext_Sizes structure member cbMaxSignature.</td></tr>
+     * <tr><td>1 / SECBUFFER_DATA</td><td>Message to be signed.</td></tr>
+     * <tr><td>2 / SECBUFFER_PADDING</td><td>Empty.</td></tr>
+     * </table>
+     * @param MessageSeqNo      *
+     *                     The sequence number that the transport application
+     *                     assigned to the message. If the transport application
+     *                     does not maintain sequence numbers, this parameter is
+     *                     zero.
+     *
+     * <p>
+     * When using the Digest SSP, this parameter must be set to zero. The Digest
+     * SSP manages sequence numbering internally.</p>
+     *
+     * @return If the function succeeds, the function returns SEC_E_OK.
+     *
+     * <p>
+     * If the function fails, it returns one of the following error codes.</p>
+     *
+     * <table>
+     * <tr><th>Return code</th><th>Description</th>
+     * <tr><td>SEC_I_RENEGOTIATE</td><td>The remote party requires a new
+     * handshake sequence or the application has just initiated a shutdown.
+     * Return to the negotiation loop and call AcceptSecurityContext (General)
+     * or InitializeSecurityContext (General) again. An empty input buffer is
+     * passed in the first call.</td></tr>
+     * <tr><td>SEC_E_INVALID_HANDLE</td><td>The context handle specified by
+     * phContext is not valid.</td></tr>
+     * <tr><td>SEC_E_INVALID_TOKEN</td><td>pMessage did not contain a valid
+     * SECBUFFER_TOKEN buffer or contained too few buffers.</td></tr>
+     * <tr><td>SEC_E_OUT_OF_SEQUENCE</td><td>The nonce count is out of
+     * sequence.</td></tr>
+     * <tr><td>SEC_E_NO_AUTHENTICATING_AUTHORITY</td><td>The security context
+     * (phContext) must be revalidated.</td></tr>
+     * <tr><td>STATUS_INVALID_PARAMETER</td><td>The nonce count is not
+     * numeric.</td></tr>
+     * <tr><td>SEC_E_QOP_NOT_SUPPORTED</td><td>The quality of protection
+     * negotiated between the client and server did not include integrity
+     * checking.</td></tr>
+     * </table>
+     */
+    int MakeSignature(CtxtHandle phContext, int fQOP, SspiX.SecBufferDesc2 pMessage, int MessageSeqNo);
     
     /**
      * DecryptMessage (Kerberos) function
@@ -122,5 +289,119 @@ public interface Secur32X extends Secur32 {
      * @return If the function verifies that the message was received in the correct sequence, the function returns SEC_E_OK.
      * @see <a href="https://msdn.microsoft.com/en-us/library/windows/desktop/aa375385(v=vs.85).aspx">MSDN Entry</a>
      */
-    int DecryptMessage(CtxtHandle phContext, Sspi.SecBufferDesc pMessage, int MessageSeqNo, IntByReference pfQOP);
+    int DecryptMessage(CtxtHandle phContext, SspiX.SecBufferDesc2 pMessage, int MessageSeqNo, IntByReference pfQOP);
+    
+    /**
+     * The AcceptSecurityContext function enables the server component of a transport 
+     * application to establish a security context between the server and a remote client.
+     * The remote client uses the InitializeSecurityContext function to start the process 
+     * of establishing a security context. The server can require one or more reply tokens
+     * from the remote client to complete establishing the security context.
+     * @param phCredential
+     *  A handle to the credentials of the server. The server calls the AcquireCredentialsHandle 
+     *  function with either the SECPKG_CRED_INBOUND or SECPKG_CRED_BOTH flag set to retrieve 
+     *  this handle. 
+     * @param phContext
+     *  A pointer to a CtxtHandle structure. On the first call to AcceptSecurityContext, 
+     *  this pointer is NULL. On subsequent calls, phContext is the handle to the partially 
+     *  formed context that was returned in the phNewContext parameter by the first call. 
+     * @param pInput
+     *  A pointer to a SecBufferDesc structure generated by a client call to 
+     *  InitializeSecurityContext that contains the input buffer descriptor. 
+     * @param fContextReq
+     *  Bit flags that specify the attributes required by the server to establish the 
+     *  context. Bit flags can be combined by using bitwise-OR operations.
+     * @param TargetDataRep
+     *  The data representation, such as byte ordering, on the target. This parameter can 
+     *  be either SECURITY_NATIVE_DREP or SECURITY_NETWORK_DREP.
+     * @param phNewContext
+     *  A pointer to a CtxtHandle structure. On the first call to AcceptSecurityContext, 
+     *  this pointer receives the new context handle. On subsequent calls, phNewContext 
+     *  can be the same as the handle specified in the phContext parameter. 
+     * @param pOutput
+     *  A pointer to a SecBufferDesc structure that contains the output buffer descriptor. 
+     *  This buffer is sent to the client for input into additional calls to 
+     *  InitializeSecurityContext. An output buffer may be generated even if the function 
+     *  returns SEC_E_OK. Any buffer generated must be sent back to the client application. 
+     * @param pfContextAttr
+     *  A pointer to a variable that receives a set of bit flags that indicate the 
+     *  attributes of the established context. For a description of the various attributes, 
+     *  see Context Requirements. Flags used for this parameter are prefixed with ASC_RET, 
+     *  for example, ASC_RET_DELEGATE.
+     * @param ptsTimeStamp
+     *  A pointer to a TimeStamp structure that receives the expiration time of the context. 
+     * @return
+     *  This function returns one of SEC_* values.
+     */
+    int AcceptSecurityContext(Sspi.CredHandle phCredential, CtxtHandle phContext,
+                                     SspiX.SecBufferDesc2 pInput, int fContextReq, int TargetDataRep,
+                                     CtxtHandle phNewContext, SspiX.SecBufferDesc2 pOutput, IntByReference pfContextAttr,
+                                     Sspi.TimeStamp ptsTimeStamp);
+	
+    /**
+     * The InitializeSecurityContext function initiates the client side, outbound security 
+     * context from a credential handle. The function is used to build a security context 
+     * between the client application and a remote peer. InitializeSecurityContext returns 
+     * a token that the client must pass to the remote peer, which the peer in turn submits 
+     * to the local security implementation through the AcceptSecurityContext call. The 
+     * token generated should be considered opaque by all callers.
+     * 
+     * Typically, the InitializeSecurityContext function is called in a loop until a 
+     * sufficient security context is established.
+     * 
+     * @param phCredential
+     *  A handle to the credentials returned by AcquireCredentialsHandle. This handle is 
+     *  used to build the security context. The InitializeSecurityContext function requires 
+     *  at least OUTBOUND credentials. 
+     * @param phContext
+     *  A pointer to a CtxtHandle structure. On the first call to InitializeSecurityContext,
+     *  this pointer is NULL. On the second call, this parameter is a pointer to the handle 
+     *  to the partially formed context returned in the phNewContext parameter by the first 
+     *  call.
+     * @param pszTargetName
+     *  A pointer to a null-terminated string that indicates the target of the context. 
+     *  The string contents are security-package specific.
+     * @param fContextReq
+     *  Bit flags that indicate requests for the context. Not all packages can support all 
+     *  requirements. Flags used for this parameter are prefixed with ISC_REQ_, for example,
+     *  ISC_REQ_DELEGATE. 
+     * @param Reserved1
+     *  This parameter is reserved and must be set to zero.
+     * @param TargetDataRep
+     *  The data representation, such as byte ordering, on the target. This parameter can be 
+     *  either SECURITY_NATIVE_DREP or SECURITY_NETWORK_DREP.
+     * @param pInput
+     *  A pointer to a SecBufferDesc structure that contains pointers to the buffers supplied 
+     *  as input to the package. The pointer must be NULL on the first call to the function. 
+     *  On subsequent calls to the function, it is a pointer to a buffer allocated with enough 
+     *  memory to hold the token returned by the remote peer.
+     * @param Reserved2
+     *  This parameter is reserved and must be set to zero. 
+     * @param phNewContext
+     *  A pointer to a CtxtHandle structure. On the first call to InitializeSecurityContext, 
+     *  this pointer receives the new context handle. On the second call, phNewContext can be 
+     *  the same as the handle specified in the phContext parameter.
+     * @param pOutput
+     *  A pointer to a SecBufferDesc structure that contains pointers to the SecBuffer structure 
+     *  that receives the output data. If a buffer was typed as SEC_READWRITE in the input, it 
+     *  will be there on output. The system will allocate a buffer for the security token if 
+     *  requested (through ISC_REQ_ALLOCATE_MEMORY) and fill in the address in the buffer 
+     *  descriptor for the security token.
+     * @param pfContextAttr
+     *  A pointer to a variable to receive a set of bit flags that indicate the attributes of 
+     *  the established context. Flags used for this parameter are prefixed with ISC_RET, 
+     *  such as ISC_RET_DELEGATE.
+     * @param ptsExpiry
+     *  A pointer to a TimeStamp structure that receives the expiration time of the context.
+     *  It is recommended that the security package always return this value in local time. 
+     *  This parameter is optional and NULL should be passed for short-lived clients.
+     * @return
+     *  If the function succeeds, the function returns one of the SEC_I_ success codes.
+     *  If the function fails, the function returns one of the SEC_E_ error codes.
+     */
+    int InitializeSecurityContext(Sspi.CredHandle phCredential, CtxtHandle phContext,
+                                         String pszTargetName, int fContextReq, int Reserved1,
+                                         int TargetDataRep, SspiX.SecBufferDesc2 pInput, int Reserved2,
+                                         CtxtHandle phNewContext, SspiX.SecBufferDesc2 pOutput, IntByReference pfContextAttr,
+                                         Sspi.TimeStamp ptsExpiry);
 }

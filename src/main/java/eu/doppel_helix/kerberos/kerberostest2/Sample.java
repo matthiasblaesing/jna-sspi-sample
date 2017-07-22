@@ -1,6 +1,6 @@
 package eu.doppel_helix.kerberos.kerberostest2;
 
-import com.sun.jna.platform.win32.Secur32;
+import com.sun.jna.Memory;
 import com.sun.jna.platform.win32.Sspi;
 import com.sun.jna.platform.win32.Sspi.CredHandle;
 import com.sun.jna.platform.win32.Sspi.CtxtHandle;
@@ -9,15 +9,21 @@ import com.sun.jna.platform.win32.Sspi.TimeStamp;
 import com.sun.jna.platform.win32.W32Errors;
 import com.sun.jna.platform.win32.WinError;
 import com.sun.jna.ptr.IntByReference;
+import eu.doppel_helix.kerberos.kerberostest2.SspiX.AutoSecBufferDesc;
 import java.nio.charset.Charset;
 
 public class Sample {
 
     public static void main(String[] args) {
-        final String packageName = "Kerberos";
+        
+//        final String packageName = "Kerberos";
+        final String packageName = "NTLM";
         
         PSecPkgInfo pkgInfo = new PSecPkgInfo();
         ensureOk(Secur32X.INSTANCE.QuerySecurityPackageInfo(packageName, pkgInfo));
+
+        System.out.println("Security Package: " + packageName);
+        System.out.println("Capabilities:\n" + String.join("\n", SECPKG_FLAG_Map.resolve(pkgInfo.pPkgInfo.fCapabilities)));
         
         final TimeStamp clientTimestamp = new TimeStamp();
         final TimeStamp serverTimestamp = new TimeStamp();
@@ -40,19 +46,19 @@ public class Sample {
         IntByReference serverContextAttr = new IntByReference();
         IntByReference clientContextAttr = new IntByReference();
         
-        Sspi.SecBufferDesc serverToken = null;
+        SspiX.AutoSecBufferDesc serverToken = null;
         int clientRc = W32Errors.SEC_I_CONTINUE_NEEDED;
         int serverRc = W32Errors.SEC_I_CONTINUE_NEEDED;
         do {
-            Sspi.SecBufferDesc pbClientToken = new Sspi.SecBufferDesc(Sspi.SECBUFFER_TOKEN, Sspi.MAX_TOKEN_SIZE);
+            SspiX.AutoSecBufferDesc pbClientToken = new SspiX.AutoSecBufferDesc(Sspi.SECBUFFER_TOKEN, Sspi.MAX_TOKEN_SIZE);
             if (clientRc == W32Errors.SEC_I_CONTINUE_NEEDED) {
-                Sspi.SecBufferDesc pbServerTokenCopy = serverToken == null
-                        ? null : new Sspi.SecBufferDesc(Sspi.SECBUFFER_TOKEN, serverToken.getBytes());
-                clientRc = Secur32.INSTANCE.InitializeSecurityContext(
+                SspiX.SecBufferDesc2 pbServerTokenCopy = serverToken == null
+                        ? null : new SspiX.AutoSecBufferDesc(Sspi.SECBUFFER_TOKEN, serverToken.getBuffer(0).getBytes());
+                clientRc = Secur32X.INSTANCE.InitializeSecurityContext(
                         clientCred,
                         clientCtx.isNull() ? null : clientCtx,
                         serverName,
-                        Sspi.ISC_REQ_CONFIDENTIALITY | Sspi.ISC_REQ_STREAM,
+                        Sspi.ISC_REQ_CONFIDENTIALITY,
                         0,
                         Sspi.SECURITY_NATIVE_DREP,
                         pbServerTokenCopy,
@@ -66,13 +72,13 @@ public class Sample {
                 }
             }
             if (serverRc == W32Errors.SEC_I_CONTINUE_NEEDED) {
-                serverToken = new Sspi.SecBufferDesc(Sspi.SECBUFFER_TOKEN, Sspi.MAX_TOKEN_SIZE);
-                Sspi.SecBufferDesc pbClientTokenByValue = new Sspi.SecBufferDesc(Sspi.SECBUFFER_TOKEN, pbClientToken.getBytes());
-                serverRc = Secur32.INSTANCE.AcceptSecurityContext(
+                serverToken = new SspiX.AutoSecBufferDesc(Sspi.SECBUFFER_TOKEN, Sspi.MAX_TOKEN_SIZE);
+                SspiX.SecBufferDesc2 pbClientTokenByValue = new SspiX.AutoSecBufferDesc(Sspi.SECBUFFER_TOKEN, pbClientToken.getBuffer(0).getBytes());
+                serverRc = Secur32X.INSTANCE.AcceptSecurityContext(
                         serverCred,
                         serverCtx.isNull() ? null : serverCtx,
                         pbClientTokenByValue,
-                        Sspi.ISC_REQ_STREAM,
+                        0,
                         Sspi.SECURITY_NATIVE_DREP,
                         serverCtx,
                         serverToken,
@@ -85,6 +91,12 @@ public class Sample {
             }
         } while (serverRc != W32Errors.SEC_E_OK || clientRc != W32Errors.SEC_E_OK);
 
+        System.out.print("\n");
+        
+        System.out.println("SRV - CONFIDENTIALITY: " + (serverContextAttr.getValue() & SspiX.ISC_REQ_CONFIDENTIALITY));
+        System.out.println("CLT - CONFIDENTIALITY: " + (clientContextAttr.getValue() & SspiX.ISC_REQ_CONFIDENTIALITY));
+        
+        System.out.print("\n");
         
         SspiX.SecPkgContext_Sizes sizes = new SspiX.SecPkgContext_Sizes();
         ensureOk(Secur32X.INSTANCE.QueryContextAttributes(clientCtx, SspiX.SECPKG_ATTR_SIZES, sizes));
@@ -93,27 +105,99 @@ public class Sample {
         
         byte[] inputData = "Hallo Welt".getBytes(Charset.forName("ASCII"));
         System.out.println("============ INPUT =============");
-        printHexDump(inputData, inputData.length);
-        System.out.println("============ CRYPT =============");
+        printHexDump(inputData);
         
-        Sspi.SecBuffer.ByReference tokenBuffer = new SspiX.SecBuffer.ByReference(SspiX.SECBUFFER_TOKEN, sizes.cbSecurityTrailer);
-        Sspi.SecBuffer.ByReference messageBuffer = new SspiX.SecBuffer.ByReference(SspiX.SECBUFFER_DATA, inputData);
-        Sspi.SecBuffer.ByReference paddingBuffer = new SspiX.SecBuffer.ByReference(SspiX.SECBUFFER_PADDING, sizes.cbBlockSize);
-        Sspi.SecBuffer.ByReference emptyBuffer = new SspiX.SecBuffer.ByReference();
-        emptyBuffer.BufferType = SspiX.SECBUFFER_EMPTY;
-
-        Sspi.SecBufferDesc pMessage = new Sspi.SecBufferDesc();
-        pMessage.pBuffers = new SspiX.SecBuffer.ByReference[]{tokenBuffer, messageBuffer, paddingBuffer, emptyBuffer};
-        pMessage.cBuffers = pMessage.pBuffers.length;
-
-        ensureOk(Secur32X.INSTANCE.EncryptMessage(clientCtx, 0, pMessage, 0));
         
-        byte[] header = tokenBuffer.getBytes();
-        byte[] messageResult = messageBuffer.getBytes();
-        byte[] trailer = paddingBuffer.getBytes();
-        printHexDump(header, header.length);
-        printHexDump(messageResult, messageResult.length);
-        printHexDump(trailer, trailer.length);
+        System.out.println("\n============ EncryptMessage =============");
+        
+        AutoSecBufferDesc encryptBuffers = new AutoSecBufferDesc(2);
+        
+        Memory tokenMemory = new Memory(sizes.cbMaxToken);
+        Memory dataMemory = new Memory(inputData.length);
+        dataMemory.write(0, inputData, 0, inputData.length);
+        
+        encryptBuffers.getBuffer(0).BufferType = SspiX.SECBUFFER_TOKEN;
+        encryptBuffers.getBuffer(0).cbBuffer = (int) tokenMemory.size();
+        encryptBuffers.getBuffer(0).pvBuffer = tokenMemory;
+        encryptBuffers.getBuffer(1).BufferType = SspiX.SECBUFFER_DATA;
+        encryptBuffers.getBuffer(1).cbBuffer = (int) dataMemory.size();
+        encryptBuffers.getBuffer(1).pvBuffer = dataMemory;
+        
+        System.out.println("Struct-Size: " + encryptBuffers.size());
+        
+        ensureOk(Secur32X.INSTANCE.EncryptMessage(clientCtx, 0, encryptBuffers, 0));
+        
+        byte[] header = encryptBuffers.getBuffer(0).getBytes();
+        byte[] messageResult = encryptBuffers.getBuffer(1).getBytes();
+        printHexDump(header);
+        printHexDump(messageResult);
+        
+        System.out.println("\n============ DecryptMessage =============");
+        
+        AutoSecBufferDesc decryptBuffers = new AutoSecBufferDesc(2);
+        
+        Memory decryptTokenMemory = new Memory(header.length);
+        decryptTokenMemory.write(0, header, 0, header.length);
+        Memory decryptDataMemory = new Memory(messageResult.length);
+        decryptDataMemory.write(0, messageResult, 0, messageResult.length);
+        
+        decryptBuffers.getBuffer(0).BufferType = SspiX.SECBUFFER_TOKEN;
+        decryptBuffers.getBuffer(0).cbBuffer = (int) decryptTokenMemory.size();
+        decryptBuffers.getBuffer(0).pvBuffer = decryptTokenMemory;
+        decryptBuffers.getBuffer(1).BufferType = SspiX.SECBUFFER_DATA;
+        decryptBuffers.getBuffer(1).cbBuffer = (int) decryptDataMemory.size();
+        decryptBuffers.getBuffer(1).pvBuffer = decryptDataMemory;
+
+        IntByReference qosResult = new IntByReference();
+        ensureOk(Secur32X.INSTANCE.DecryptMessage(serverCtx, decryptBuffers, 0, qosResult));
+
+        System.out.println("QOS: " + qosResult.getValue());
+        byte[] decryptMessageResult = decryptBuffers.getBuffer(1).getBytes();
+        printHexDump(decryptMessageResult);
+        
+        System.out.println("\n============ MakeSignature =============");
+        
+        AutoSecBufferDesc signBuffers = new AutoSecBufferDesc(2);
+        
+        Memory signTokenMemory = new Memory(sizes.cbMaxSignature);
+        Memory signDataMemory = new Memory(inputData.length);
+        signDataMemory.write(0, inputData, 0, inputData.length);
+        
+        signBuffers.getBuffer(0).BufferType = SspiX.SECBUFFER_TOKEN;
+        signBuffers.getBuffer(0).cbBuffer = (int) signTokenMemory.size();
+        signBuffers.getBuffer(0).pvBuffer = signTokenMemory;
+        signBuffers.getBuffer(1).BufferType = SspiX.SECBUFFER_DATA;
+        signBuffers.getBuffer(1).cbBuffer = (int) signDataMemory.size();
+        signBuffers.getBuffer(1).pvBuffer = signDataMemory;
+        
+        ensureOk(Secur32X.INSTANCE.MakeSignature(clientCtx, 0, signBuffers, 0));
+        
+        byte[] signToken = signBuffers.getBuffer(0).getBytes();
+        byte[] signMessageResult = signBuffers.getBuffer(1).getBytes();
+        printHexDump(signToken);
+        printHexDump(signMessageResult);
+        
+        System.out.println("\n============ VerifySignature =============");
+        
+        AutoSecBufferDesc verifyBuffers = new AutoSecBufferDesc(2);
+        
+        Memory verifyTokenMemory = new Memory(signToken.length);
+        verifyTokenMemory.write(0, signToken, 0, signToken.length);
+        Memory verifyDataMemory = new Memory(signMessageResult.length);
+        verifyDataMemory.write(0, signMessageResult, 0, signMessageResult.length);
+        
+        verifyBuffers.getBuffer(0).BufferType = SspiX.SECBUFFER_TOKEN;
+        verifyBuffers.getBuffer(0).cbBuffer = (int) verifyTokenMemory.size();
+        verifyBuffers.getBuffer(0).pvBuffer = verifyTokenMemory;
+        verifyBuffers.getBuffer(1).BufferType = SspiX.SECBUFFER_DATA;
+        verifyBuffers.getBuffer(1).cbBuffer = (int) verifyDataMemory.size();
+        verifyBuffers.getBuffer(1).pvBuffer = verifyDataMemory;
+
+        IntByReference qosSigingResult = new IntByReference();
+        ensureOk(Secur32X.INSTANCE.VerifySignature(serverCtx, verifyBuffers, 0, qosSigingResult));
+
+        System.out.println("QOS: " + qosSigingResult.getValue());
+        printHexDump(signMessageResult);
     }
 
     
@@ -125,9 +209,9 @@ public class Sample {
     
     private static final String[] hexDigits = new String[]{"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "a", "b", "c", "d", "e", "f"};
 
-    private static void printHexDump(byte[] data, int length) {
+    private static void printHexDump(byte[] data) {
         StringBuilder rowBuffer = new StringBuilder(100);
-        for (int rowOffset = 0; rowOffset < length; rowOffset += 16) {
+        for (int rowOffset = 0; rowOffset < data.length; rowOffset += 16) {
             rowBuffer.append(String.format("%04x | ", rowOffset));
             for (int i = 0; i < 16; i++) {
                 if ((rowOffset + i) < data.length) {

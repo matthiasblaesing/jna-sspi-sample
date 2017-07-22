@@ -7,7 +7,6 @@ import com.sun.jna.Pointer;
 import com.sun.jna.Structure;
 import static com.sun.jna.Structure.createFieldsOrder;
 import com.sun.jna.platform.win32.Sspi;
-import com.sun.jna.platform.win32.W32Errors;
 import com.sun.jna.win32.W32APITypeMapper;
 import java.util.List;
 
@@ -28,7 +27,7 @@ public interface SspiX extends Sspi {
     public static final int SECBUFFER_STREAM_HEADER = 7;
     public static final int SECBUFFER_PADDING = 9;
     public static final int SECBUFFER_STREAM = 10;
-    
+    public static final int ISC_REQ_DATAGRAM = 0x00000400;
     
     /**
      * Produce a header or trailer but do not encrypt the message.
@@ -360,6 +359,91 @@ public interface SspiX extends Sspi {
 
         public SecPkgContext_Flags() {
             super(W32APITypeMapper.DEFAULT);
+        }
+
+        @Override
+        protected List<String> getFieldOrder() {
+            return FIELDS;
+        }
+    }
+    
+    public static class AutoSecBufferDesc extends SecBufferDesc2 {
+                
+        private final SecBuffer[] secBuffers;
+        
+        /**
+         * Create a new SecBufferDesc with initial data.
+         * @param type Token type.
+         * @param token Initial token data.
+         */
+        public AutoSecBufferDesc(int type, byte[] token) {
+            secBuffers = new SecBuffer[] { new SecBuffer(type, token) };
+            pBuffers = secBuffers[0].getPointer();
+            cBuffers = secBuffers.length;
+        }
+
+        /**
+         * Create a new SecBufferDesc with one SecBuffer of a given type and size.
+         * @param type type
+         * @param tokenSize token size
+         */
+        public AutoSecBufferDesc(int type, int tokenSize) {
+            secBuffers = new SecBuffer[] { new SecBuffer(type, tokenSize) };
+            pBuffers = secBuffers[0].getPointer();
+            cBuffers = secBuffers.length;
+        }
+        
+        public AutoSecBufferDesc(int bufferCount) {
+            cBuffers = bufferCount;
+            secBuffers = (SecBuffer[]) new SecBuffer().toArray(2);
+            pBuffers = secBuffers[0].getPointer();
+            cBuffers = secBuffers.length;
+        }
+
+        public SecBuffer getBuffer(int idx) {
+            return secBuffers[idx];
+        }
+
+        @Override
+        public void write() {
+            for(SecBuffer sb: secBuffers)  {
+                sb.write();
+            }
+            writeField("ulVersion");
+            writeField("pBuffers");
+            writeField("cBuffers");
+        }
+
+        @Override
+        public void read() {
+            for (SecBuffer sb : secBuffers) {
+                sb.read();
+            }
+        }
+
+    }
+    
+    public static class SecBufferDesc2 extends Structure {
+        public static final List<String> FIELDS = createFieldsOrder("ulVersion", "cBuffers", "pBuffers");
+
+        /**
+         * Version number.
+         */
+        public int ulVersion = SECBUFFER_VERSION;
+        /**
+         * Number of buffers.
+         */
+        public int cBuffers = 1;
+        /**
+         * Pointer to array of buffers.
+         */
+        public Pointer pBuffers;
+
+        /**
+         * Create a new SecBufferDesc with one SECBUFFER_EMPTY buffer.
+         */
+        public SecBufferDesc2() {
+            super();
         }
 
         @Override
