@@ -16,8 +16,7 @@ public class Sample {
 
     public static void main(String[] args) {
         
-//        final String packageName = "Kerberos";
-        final String packageName = "NTLM";
+        final String packageName = "Negotiate";
         
         PSecPkgInfo pkgInfo = new PSecPkgInfo();
         ensureOk(Secur32X.INSTANCE.QuerySecurityPackageInfo(packageName, pkgInfo));
