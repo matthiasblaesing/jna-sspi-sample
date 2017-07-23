@@ -2,24 +2,24 @@ package eu.doppel_helix.kerberos.kerberostest2;
 
 
 
-import com.sun.jna.NativeLong;
 import com.sun.jna.Pointer;
 import com.sun.jna.Structure;
 import static com.sun.jna.Structure.createFieldsOrder;
 import com.sun.jna.platform.win32.Sspi;
+import com.sun.jna.platform.win32.WinBase;
 import com.sun.jna.win32.W32APITypeMapper;
+import java.util.Date;
 import java.util.List;
 
 public interface SspiX extends Sspi {
 
     public static final int SECPKG_CRED_ATTR_NAMES = 1;
-    public static final int SECPKG_CRED_ATTR_SSI_PROVIDER = 2;
-    public static final int SECPKG_CRED_ATTR_KDC_PROXY_SETTINGS = 3;
-    public static final int SECPKG_CRED_ATTR_CERT = 4;
+    
     public static final int SECPKG_ATTR_SESSION_KEY = 9;
     public static final int SECPKG_ATTR_KEY_INFO = 5;
     public static final int SECPKG_ATTR_LIFESPAN = 2;
     public static final int SECPKG_ATTR_SIZES = 0;
+    
     public static final int SECPKG_ATTR_NEGOTIATION_INFO = 12;
     public static final int SECPKG_ATTR_FLAGS = 14;
     public static final int SECPKG_ATTR_STREAM_SIZES = 4;
@@ -28,6 +28,21 @@ public interface SspiX extends Sspi {
     public static final int SECBUFFER_PADDING = 9;
     public static final int SECBUFFER_STREAM = 10;
     public static final int ISC_REQ_DATAGRAM = 0x00000400;
+
+    /**
+     * Negotiation has been completed.
+     */
+    int SECPKG_NEGOTIATION_COMPLETE = 0;
+    /**
+     * Negotiations not yet completed.
+     */
+    int SECPKG_NEGOTIATION_OPTIMISTIC = 1;
+    /**
+     * Negotiations in progress.
+     */
+    int SECPKG_NEGOTIATION_IN_PROGRESS = 2;
+    int SECPKG_NEGOTIATION_DIRECT = 3;
+    int SECPKG_NEGOTIATION_TRY_MULTICRED = 4;
     
     /**
      * Produce a header or trailer but do not encrypt the message.
@@ -82,7 +97,7 @@ public interface SspiX extends Sspi {
         /**
          * Size, in bytes, of the session key.
          */
-        public NativeLong SessionKeyLength;
+        public int SessionKeyLength;
         
         /**
          * The session key for the security context.
@@ -102,7 +117,7 @@ public interface SspiX extends Sspi {
             if(SessionKey == null) {
                 return null;
             }
-            return SessionKey.getByteArray(0, SessionKeyLength.intValue());
+            return SessionKey.getByteArray(0, SessionKeyLength);
         }
         
         public synchronized void free() {
@@ -192,17 +207,31 @@ public interface SspiX extends Sspi {
         /**
          * Time at which the context was established.
          */
-        public int tsStart;
+        public TimeStamp tsStart;
         
         /**
          * Time at which the context will expire.
          */
-        public Pointer tsExpiry;
+        public TimeStamp tsExpiry;
 
         public SecPkgContext_Lifespan() {
             super(W32APITypeMapper.DEFAULT);
         }
 
+        public Date getStartAsDate()  {
+            if(tsStart != null && (tsStart.dwLower != 0 || tsStart.dwUpper != 0)) {
+                return WinBase.FILETIME.filetimeToDate(tsStart.dwUpper, tsStart.dwLower);
+            }
+            return null;
+        }
+        
+        public Date getExpiryAsDate()  {
+            if(tsExpiry != null && (tsExpiry.dwLower != 0 || tsExpiry.dwUpper != 0)) {
+                return WinBase.FILETIME.filetimeToDate(tsExpiry.dwUpper, tsExpiry.dwLower);
+            }
+            return null;
+        }
+        
         @Override
         protected List<String> getFieldOrder() {
             return FIELDS;
@@ -253,8 +282,6 @@ public interface SspiX extends Sspi {
                     cbBlockSize + ", cbSecurityTrailer=" + cbSecurityTrailer +
                     '}';
         }
-        
-        
     }
     
     public static class SecPkgContext_NegotiationInfo extends Structure {
@@ -273,7 +300,7 @@ public interface SspiX extends Sspi {
         /**
          * Time at which the context will expire.
          */
-        public NativeLong NegotiationState;
+        public int NegotiationState;
 
         public SecPkgContext_NegotiationInfo() {
             super(W32APITypeMapper.DEFAULT);
@@ -283,65 +310,6 @@ public interface SspiX extends Sspi {
         protected List<String> getFieldOrder() {
             return FIELDS;
         }
-        
-        public void free() {
-            if(PackageInfo != null) {
-                Secur32X.INSTANCE.FreeContextBuffer(PackageInfo.getPointer());
-                PackageInfo = null;
-            }
-        }
-    }
-    
-    public static class SecPkgContext_StreamSizes extends Structure {
-
-        public static class ByReference extends SecPkgContext_StreamSizes implements Structure.ByReference {
-
-        }
-
-        public static final List<String> FIELDS = createFieldsOrder("cbHeader", "cbTrailer", "cbMaximumMessage", "cBuffers", "cbBlockSize");
-
-        /**
-         * Specifies the size, in bytes, of the header portion. If zero, no header is used.
-         */
-        public int cbHeader;
-        
-        /**
-         * Specifies the maximum size, in bytes, of the trailer portion. If zero, no trailer is used.
-         */
-        public int cbTrailer;
-        
-        /**
-         * Specifies the size, in bytes, of the largest message that can be encapsulated.
-         */
-        public int cbMaximumMessage;
-        
-        /**
-         * Specifies the number of buffers to pass.
-         */
-        public int cBuffers;
-        
-        /**
-         * Specifies the preferred integral size of the messages. For example, eight indicates that messages should be of size zero mod eight for optimal performance. Messages other than this block size can be padded.
-         */
-        public int cbBlockSize;
-
-        public SecPkgContext_StreamSizes() {
-            super(W32APITypeMapper.DEFAULT);
-        }
-
-        @Override
-        protected List<String> getFieldOrder() {
-            return FIELDS;
-        }
-
-        @Override
-        public String toString() {
-            return "SecPkgContext_StreamSizes{" + "cbHeader=" + cbHeader +
-                    ", cbTrailer=" + cbTrailer + ", cbMaximumMessage=" +
-                    cbMaximumMessage + ", cBuffers=" + cBuffers +
-                    ", cbBlockSize=" + cbBlockSize + '}';
-        }
-        
     }
     
     public static class SecPkgContext_Flags extends Structure {
@@ -353,7 +321,9 @@ public interface SspiX extends Sspi {
         public static final List<String> FIELDS = createFieldsOrder("Flags");
 
         /**
-         * Flag values for the current security context. These values correspond to the flags negotiated by the InitializeSecurityContext (General) and AcceptSecurityContext (General) functions.
+         * Flag values for the current security context. These values correspond
+         * to the flags negotiated by the InitializeSecurityContext (General)
+         * and AcceptSecurityContext (General) functions.
          */
         public int Flags;
 

@@ -7,10 +7,14 @@ import com.sun.jna.platform.win32.Sspi.CtxtHandle;
 import com.sun.jna.platform.win32.Sspi.PSecPkgInfo;
 import com.sun.jna.platform.win32.Sspi.TimeStamp;
 import com.sun.jna.platform.win32.W32Errors;
+import com.sun.jna.platform.win32.WinBase.FILETIME;
 import com.sun.jna.platform.win32.WinError;
 import com.sun.jna.ptr.IntByReference;
 import eu.doppel_helix.kerberos.kerberostest2.SspiX.AutoSecBufferDesc;
+import eu.doppel_helix.kerberos.kerberostest2.SspiX.SecPkgContext_Lifespan;
+import eu.doppel_helix.kerberos.kerberostest2.SspiX.SecPkgContext_NegotiationInfo;
 import java.nio.charset.Charset;
+import java.util.Base64;
 
 public class Sample {
 
@@ -101,6 +105,41 @@ public class Sample {
         ensureOk(Secur32X.INSTANCE.QueryContextAttributes(clientCtx, SspiX.SECPKG_ATTR_SIZES, sizes));
         
         System.out.println(sizes);
+        
+        System.out.print("\n");
+        
+        SecPkgContext_NegotiationInfo negotiateInfo = new SecPkgContext_NegotiationInfo();
+        Secur32X.INSTANCE.QueryContextAttributes(clientCtx, SspiX.SECPKG_ATTR_NEGOTIATION_INFO, negotiateInfo);
+        System.out.println("Negotiation State:  " + negotiateInfo.NegotiationState);
+        System.out.println("Negotiated Package: " + negotiateInfo.PackageInfo.pPkgInfo.Name);
+        
+        System.out.print("\n");
+        
+        SecPkgContext_Lifespan lifespanInfo = new SecPkgContext_Lifespan();
+        Secur32X.INSTANCE.QueryContextAttributes(clientCtx, SspiX.SECPKG_ATTR_LIFESPAN, lifespanInfo);
+        System.out.println("LT-Start:  " + lifespanInfo.getStartAsDate());
+        System.out.println("LT-Expiry: " + lifespanInfo.getExpiryAsDate());
+        
+        System.out.print("\n");
+        
+        SspiX.SecPkgContext_KeyInfo keyInfo = new SspiX.SecPkgContext_KeyInfo();
+        
+        Secur32X.INSTANCE.QueryContextAttributes(clientCtx, SspiX.SECPKG_ATTR_KEY_INFO, keyInfo);
+        System.out.println("Encryption Algorithm:  " + keyInfo.getEncryptAlgorithmName());
+        System.out.println("Signature Algorithm:   " + keyInfo.getSignatureAlgorithmName());
+        System.out.println("Keysize:               " + keyInfo.KeySize);
+        keyInfo.free();
+        
+        System.out.print("\n");
+        
+        SspiX.SecPkgContext_SessionKey sessionKey = new SspiX.SecPkgContext_SessionKey();
+        
+        Secur32X.INSTANCE.QueryContextAttributes(clientCtx, SspiX.SECPKG_ATTR_SESSION_KEY, sessionKey);
+        System.out.println("Session Key length: " + sessionKey.SessionKeyLength);
+        System.out.println("Session Key:        " + Base64.getEncoder().encodeToString(sessionKey.getSessionKey()));
+        sessionKey.free();
+        
+        System.out.print("\n");
         
         byte[] inputData = "Hallo Welt".getBytes(Charset.forName("ASCII"));
         System.out.println("============ INPUT =============");
