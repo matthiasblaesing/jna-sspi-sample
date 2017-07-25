@@ -310,6 +310,13 @@ public interface SspiX extends Sspi {
         protected List<String> getFieldOrder() {
             return FIELDS;
         }
+        
+        public synchronized void free() {
+            if(PackageInfo != null) {
+                Secur32X.INSTANCE.FreeContextBuffer(PackageInfo.pPkgInfo.getPointer());
+                PackageInfo = null;
+            }
+        }
     }
     
     public static class SecPkgContext_Flags extends Structure {

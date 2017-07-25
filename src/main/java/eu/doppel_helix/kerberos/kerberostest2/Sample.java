@@ -112,6 +112,7 @@ public class Sample {
         Secur32X.INSTANCE.QueryContextAttributes(clientCtx, SspiX.SECPKG_ATTR_NEGOTIATION_INFO, negotiateInfo);
         System.out.println("Negotiation State:  " + negotiateInfo.NegotiationState);
         System.out.println("Negotiated Package: " + negotiateInfo.PackageInfo.pPkgInfo.Name);
+        negotiateInfo.free();
         
         System.out.print("\n");
         
