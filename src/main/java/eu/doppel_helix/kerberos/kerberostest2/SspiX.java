@@ -344,7 +344,7 @@ public interface SspiX extends Sspi {
         }
     }
     
-    public static class AutoSecBufferDesc extends SecBufferDesc2 {
+    public static class ManagedSecBufferDesc extends SecBufferDesc2 {
                 
         private final SecBuffer[] secBuffers;
         
@@ -353,7 +353,7 @@ public interface SspiX extends Sspi {
          * @param type Token type.
          * @param token Initial token data.
          */
-        public AutoSecBufferDesc(int type, byte[] token) {
+        public ManagedSecBufferDesc(int type, byte[] token) {
             secBuffers = new SecBuffer[] { new SecBuffer(type, token) };
             pBuffers = secBuffers[0].getPointer();
             cBuffers = secBuffers.length;
@@ -364,13 +364,13 @@ public interface SspiX extends Sspi {
          * @param type type
          * @param tokenSize token size
          */
-        public AutoSecBufferDesc(int type, int tokenSize) {
+        public ManagedSecBufferDesc(int type, int tokenSize) {
             secBuffers = new SecBuffer[] { new SecBuffer(type, tokenSize) };
             pBuffers = secBuffers[0].getPointer();
             cBuffers = secBuffers.length;
         }
         
-        public AutoSecBufferDesc(int bufferCount) {
+        public ManagedSecBufferDesc(int bufferCount) {
             cBuffers = bufferCount;
             secBuffers = (SecBuffer[]) new SecBuffer().toArray(2);
             pBuffers = secBuffers[0].getPointer();

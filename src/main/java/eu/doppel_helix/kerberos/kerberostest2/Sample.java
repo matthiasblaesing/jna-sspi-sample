@@ -10,7 +10,7 @@ import com.sun.jna.platform.win32.W32Errors;
 import com.sun.jna.platform.win32.WinBase.FILETIME;
 import com.sun.jna.platform.win32.WinError;
 import com.sun.jna.ptr.IntByReference;
-import eu.doppel_helix.kerberos.kerberostest2.SspiX.AutoSecBufferDesc;
+import eu.doppel_helix.kerberos.kerberostest2.SspiX.ManagedSecBufferDesc;
 import eu.doppel_helix.kerberos.kerberostest2.SspiX.SecPkgContext_Lifespan;
 import eu.doppel_helix.kerberos.kerberostest2.SspiX.SecPkgContext_NegotiationInfo;
 import java.nio.charset.Charset;
@@ -49,14 +49,14 @@ public class Sample {
         IntByReference serverContextAttr = new IntByReference();
         IntByReference clientContextAttr = new IntByReference();
         
-        SspiX.AutoSecBufferDesc serverToken = null;
+        SspiX.ManagedSecBufferDesc serverToken = null;
         int clientRc = W32Errors.SEC_I_CONTINUE_NEEDED;
         int serverRc = W32Errors.SEC_I_CONTINUE_NEEDED;
         do {
-            SspiX.AutoSecBufferDesc pbClientToken = new SspiX.AutoSecBufferDesc(Sspi.SECBUFFER_TOKEN, Sspi.MAX_TOKEN_SIZE);
+            SspiX.ManagedSecBufferDesc pbClientToken = new SspiX.ManagedSecBufferDesc(Sspi.SECBUFFER_TOKEN, Sspi.MAX_TOKEN_SIZE);
             if (clientRc == W32Errors.SEC_I_CONTINUE_NEEDED) {
                 SspiX.SecBufferDesc2 pbServerTokenCopy = serverToken == null
-                        ? null : new SspiX.AutoSecBufferDesc(Sspi.SECBUFFER_TOKEN, serverToken.getBuffer(0).getBytes());
+                        ? null : new SspiX.ManagedSecBufferDesc(Sspi.SECBUFFER_TOKEN, serverToken.getBuffer(0).getBytes());
                 clientRc = Secur32X.INSTANCE.InitializeSecurityContext(
                         clientCred,
                         clientCtx.isNull() ? null : clientCtx,
@@ -75,8 +75,8 @@ public class Sample {
                 }
             }
             if (serverRc == W32Errors.SEC_I_CONTINUE_NEEDED) {
-                serverToken = new SspiX.AutoSecBufferDesc(Sspi.SECBUFFER_TOKEN, Sspi.MAX_TOKEN_SIZE);
-                SspiX.SecBufferDesc2 pbClientTokenByValue = new SspiX.AutoSecBufferDesc(Sspi.SECBUFFER_TOKEN, pbClientToken.getBuffer(0).getBytes());
+                serverToken = new SspiX.ManagedSecBufferDesc(Sspi.SECBUFFER_TOKEN, Sspi.MAX_TOKEN_SIZE);
+                SspiX.SecBufferDesc2 pbClientTokenByValue = new SspiX.ManagedSecBufferDesc(Sspi.SECBUFFER_TOKEN, pbClientToken.getBuffer(0).getBytes());
                 serverRc = Secur32X.INSTANCE.AcceptSecurityContext(
                         serverCred,
                         serverCtx.isNull() ? null : serverCtx,
@@ -149,7 +149,7 @@ public class Sample {
         
         System.out.println("\n============ EncryptMessage =============");
         
-        AutoSecBufferDesc encryptBuffers = new AutoSecBufferDesc(2);
+        ManagedSecBufferDesc encryptBuffers = new ManagedSecBufferDesc(2);
         
         Memory tokenMemory = new Memory(sizes.cbMaxToken);
         Memory dataMemory = new Memory(inputData.length);
@@ -173,7 +173,7 @@ public class Sample {
         
         System.out.println("\n============ DecryptMessage =============");
         
-        AutoSecBufferDesc decryptBuffers = new AutoSecBufferDesc(2);
+        ManagedSecBufferDesc decryptBuffers = new ManagedSecBufferDesc(2);
         
         Memory decryptTokenMemory = new Memory(header.length);
         decryptTokenMemory.write(0, header, 0, header.length);
@@ -196,7 +196,7 @@ public class Sample {
         
         System.out.println("\n============ MakeSignature =============");
         
-        AutoSecBufferDesc signBuffers = new AutoSecBufferDesc(2);
+        ManagedSecBufferDesc signBuffers = new ManagedSecBufferDesc(2);
         
         Memory signTokenMemory = new Memory(sizes.cbMaxSignature);
         Memory signDataMemory = new Memory(inputData.length);
@@ -218,7 +218,7 @@ public class Sample {
         
         System.out.println("\n============ VerifySignature =============");
         
-        AutoSecBufferDesc verifyBuffers = new AutoSecBufferDesc(2);
+        ManagedSecBufferDesc verifyBuffers = new ManagedSecBufferDesc(2);
         
         Memory verifyTokenMemory = new Memory(signToken.length);
         verifyTokenMemory.write(0, signToken, 0, signToken.length);
