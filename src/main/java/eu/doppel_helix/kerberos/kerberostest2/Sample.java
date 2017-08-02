@@ -1,16 +1,17 @@
 package eu.doppel_helix.kerberos.kerberostest2;
 
 import com.sun.jna.Memory;
+import com.sun.jna.platform.win32.Advapi32Util;
 import com.sun.jna.platform.win32.Sspi;
 import com.sun.jna.platform.win32.Sspi.CredHandle;
 import com.sun.jna.platform.win32.Sspi.CtxtHandle;
 import com.sun.jna.platform.win32.Sspi.PSecPkgInfo;
 import com.sun.jna.platform.win32.Sspi.TimeStamp;
 import com.sun.jna.platform.win32.W32Errors;
-import com.sun.jna.platform.win32.WinBase.FILETIME;
 import com.sun.jna.platform.win32.WinError;
 import com.sun.jna.ptr.IntByReference;
 import eu.doppel_helix.kerberos.kerberostest2.SspiX.ManagedSecBufferDesc;
+import eu.doppel_helix.kerberos.kerberostest2.SspiX.SEC_WINNT_AUTH_IDENTITY;
 import eu.doppel_helix.kerberos.kerberostest2.SspiX.SecPkgContext_Lifespan;
 import eu.doppel_helix.kerberos.kerberostest2.SspiX.SecPkgContext_NegotiationInfo;
 import java.nio.charset.Charset;
@@ -33,8 +34,15 @@ public class Sample {
         final CredHandle serverCred = new CredHandle();
         final CredHandle clientCred = new CredHandle();
         
+        // Secondary identity for test
+        SEC_WINNT_AUTH_IDENTITY identity = new SspiX.SEC_WINNT_AUTH_IDENTITY();
+        identity.User = "test";
+        identity.Domain = "KONZERN.INTERN";
+        identity.Password = "Satire1";
+        identity.write();
+        
         ensureOk(Secur32X.INSTANCE.AcquireCredentialsHandle(null, packageName, SspiX.SECPKG_CRED_INBOUND, null, null, null, null, serverCred, serverTimestamp));
-        ensureOk(Secur32X.INSTANCE.AcquireCredentialsHandle(null, packageName, SspiX.SECPKG_CRED_OUTBOUND, null, null, null, null, clientCred, clientTimestamp));
+        ensureOk(Secur32X.INSTANCE.AcquireCredentialsHandle(null, packageName, SspiX.SECPKG_CRED_OUTBOUND, null, identity.getPointer(), null, null, clientCred, clientTimestamp));
         
         SspiX.SecPkgCredentials_Names names = new SspiX.SecPkgCredentials_Names();
         ensureOk(Secur32X.INSTANCE.QueryCredentialsAttributes(serverCred, SspiX.SECPKG_CRED_ATTR_NAMES, names));
@@ -42,6 +50,16 @@ public class Sample {
         String serverName = names.getUserName();
         
         names.free();
+        
+        names = new SspiX.SecPkgCredentials_Names();
+        ensureOk(Secur32X.INSTANCE.QueryCredentialsAttributes(clientCred, SspiX.SECPKG_CRED_ATTR_NAMES, names));
+        
+        String clientName = names.getUserName();
+        
+        names.free();
+        
+        System.out.printf("Client name: %s%n", clientName);
+        System.out.printf("Server name: %s%n", serverName);
         
         CtxtHandle clientCtx = new CtxtHandle();
         CtxtHandle serverCtx = new CtxtHandle();
@@ -61,7 +79,7 @@ public class Sample {
                         clientCred,
                         clientCtx.isNull() ? null : clientCtx,
                         serverName,
-                        Sspi.ISC_REQ_CONFIDENTIALITY,
+                        Sspi.ISC_REQ_CONFIDENTIALITY | Sspi.ISC_REQ_DELEGATE,
                         0,
                         Sspi.SECURITY_NATIVE_DREP,
                         pbServerTokenCopy,
@@ -98,6 +116,11 @@ public class Sample {
         
         System.out.println("SRV - CONFIDENTIALITY: " + (serverContextAttr.getValue() & SspiX.ISC_REQ_CONFIDENTIALITY));
         System.out.println("CLT - CONFIDENTIALITY: " + (clientContextAttr.getValue() & SspiX.ISC_REQ_CONFIDENTIALITY));
+        System.out.println("SRV - DELEGATION: " + (serverContextAttr.getValue() & SspiX.ISC_REQ_DELEGATE));
+        System.out.println("CLT - DELEGATION: " + (clientContextAttr.getValue() & SspiX.ISC_REQ_DELEGATE));
+        System.out.println("SRV - Mutual Auth: " + (serverContextAttr.getValue() & SspiX.ISC_REQ_MUTUAL_AUTH));
+        System.out.println("CLT - Mutual Auth: " + (clientContextAttr.getValue() & SspiX.ISC_REQ_MUTUAL_AUTH));
+        
         
         System.out.print("\n");
         
@@ -237,6 +260,16 @@ public class Sample {
 
         System.out.println("QOS: " + qosSigingResult.getValue());
         printHexDump(signMessageResult);
+        
+        ensureOk(Secur32X.INSTANCE.ImpersonateSecurityContext(serverCtx));
+        System.out.println(Advapi32Util.getUserName());
+        ensureOk(Secur32X.INSTANCE.RevertSecurityContext(serverCtx));
+        
+        ensureOk(Secur32X.INSTANCE.DeleteSecurityContext(clientCtx));
+        ensureOk(Secur32X.INSTANCE.DeleteSecurityContext(serverCtx));
+        
+        ensureOk(Secur32X.INSTANCE.FreeCredentialsHandle(clientCred));
+        ensureOk(Secur32X.INSTANCE.FreeCredentialsHandle(serverCred));
     }
 
     

@@ -428,4 +428,85 @@ public interface SspiX extends Sspi {
             return FIELDS;
         }
     }
+    
+    public static final int SEC_WINNT_AUTH_IDENTITY_ANSI = 0x1;
+    public static final int SEC_WINNT_AUTH_IDENTITY_UNICODE = 0x2;
+
+    
+    public static class SEC_WINNT_AUTH_IDENTITY extends Structure {
+
+        public static final List<String> FIELDS = createFieldsOrder("User", "UserLength", "Domain", "DomainLength", "Password", "PasswordLength", "Flags");
+
+        /**
+         * A string that contains the user name.
+         */
+        public String User;
+
+        /**
+         * The length, in characters, of the user string, not including the
+         * terminating null character.
+         */
+        public int UserLength;
+
+        /**
+         * A string that contains the domain name or the workgroup name.
+         */
+        public String Domain;
+
+        /**
+         * The length, in characters, of the domain string, not including the
+         * terminating null character.
+         */
+        public int DomainLength;
+
+        /**
+         * A string that contains the password of the user in the domain or
+         * workgroup. When you have finished using the password, remove the
+         * sensitive information from memory by calling SecureZeroMemory. For
+         * more information about protecting the password, see Handling
+         * Passwords.
+         */
+        public String Password;
+
+        /**
+         * The length, in characters, of the password string, not including the
+         * terminating null character.
+         */
+        public int PasswordLength;
+
+        /**
+         * This member can be one of the following values.
+         *
+         * <table>
+         * <tr><th>Value</th><th>Meaning</th></tr>
+         * <tr><td>SEC_WINNT_AUTH_IDENTITY_ANSI</td><td>The strings in this structure are in ANSI format.</td></tr>
+         * <tr><td>SEC_WINNT_AUTH_IDENTITY_UNICODE</td><td>The strings in this structure are in Unicode format.</td></tr>
+         * </table>
+         *
+         * <strong>As the string encoding is managed by JNA do not change this
+         * value!</strong>
+         */
+        public int Flags = SEC_WINNT_AUTH_IDENTITY_UNICODE;
+    
+
+        /**
+         * Create a new SecBufferDesc with one SECBUFFER_EMPTY buffer.
+         */
+        public SEC_WINNT_AUTH_IDENTITY() {
+            super(W32APITypeMapper.UNICODE);
+        }
+
+        @Override
+        public void write() {
+            UserLength = User == null ? 0 : User.length();
+            DomainLength = Domain == null ? 0 : Domain.length();
+            PasswordLength = Password == null ? 0 : Password.length();
+            super.write();
+        }
+        
+        @Override
+        protected List<String> getFieldOrder() {
+            return FIELDS;
+        }
+    }
 }
